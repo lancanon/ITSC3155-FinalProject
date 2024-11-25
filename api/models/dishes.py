@@ -13,5 +13,5 @@ class Dish(Base):
     category = Column(String(100), unique=False, nullable=True)
     calories = Column(Integer, unique=False, nullable=True)
 
-    recipes = relationship("Recipe", back_populates="dishes")
-    order_details = relationship("OrderDetail", back_populates="dishes")
+    # recipes = relationship("Recipe", back_populates="dishes")
+    # order_details = relationship("OrderDetail", back_populates="dishes")

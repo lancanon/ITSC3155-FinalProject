@@ -4,6 +4,9 @@ from datetime import datetime
 from ..dependencies.database import Base
 
 
+
+##Need to figure out how backpopulates works because its ruining everything
+
 class Resource(Base):
     __tablename__ = "resources"
 
@@ -11,4 +14,4 @@ class Resource(Base):
     item = Column(String(100), unique=True, nullable=False)
     amount = Column(Integer, index=True, nullable=False, server_default='0.0')
 
-    recipes = relationship("Recipe", back_populates="resource")
+    # recipes = relationship("Recipe", back_populates="resource")
