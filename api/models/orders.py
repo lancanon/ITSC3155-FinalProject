@@ -1,15 +1,21 @@
-from sqlalchemy import Column, ForeignKey, Integer, String, DECIMAL, DATETIME
+from sqlalchemy import Column, ForeignKey, Integer, String, Float, Enum, DateTime
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from ..dependencies.database import Base
-
 
 class Order(Base):
     __tablename__ = "orders"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    customer_name = Column(String(100))
-    order_date = Column(DATETIME, nullable=False, server_default=str(datetime.now()))
-    description = Column(String(300))
-    #delivery = Column(Boolean, nullable=False)
-    # order_details = relationship("OrderDetail", back_populates="order")
+    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False)
+    order_date = Column(DateTime, nullable=False, default=datetime.utcnow)
+    tracking_number = Column(String(100), unique=True, nullable=False)
+    status = Column(Enum("Pending", "Preparing", "Delivered", name="order_status"), default="Pending")
+    total_price = Column(Float, nullable=False)
+
+    # relationships
+    customer = relationship("Customer", back_populates="orders")
+    order_details = relationship("OrderDetail", back_populates="order")
+    ratings_reviews = relationship("RatingReview", back_populates="order", uselist=False)
+    payment_info = relationship("PaymentInformation", back_populates="order", uselist=False)
+
