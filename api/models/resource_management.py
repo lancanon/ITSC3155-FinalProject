@@ -10,6 +10,4 @@ class ResourceManagement(Base):
     current_amount = Column(Float, nullable=False, default=0.0)
     unit = Column(String(20), nullable=False)
     threshold_level = Column(Float, nullable=False)
-
-    # Relationships
-    recipes = relationship("Recipe", back_populates="resource")
+    
