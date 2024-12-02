@@ -1,27 +1,26 @@
-from datetime import datetime
-from typing import Optional
 from pydantic import BaseModel
-from .resources import Resource
-from .dishes import Dish
+from typing import Optional
+from .resource_management import ResourceManagement
+from .menu_items import MenuItem
 
 
 class RecipeBase(BaseModel):
-    amount: int
+    quantity: int
 
 
 class RecipeCreate(RecipeBase):
-    dish_id: int
+    menu_item_id: int
     resource_id: int
 
 class RecipeUpdate(BaseModel):
-    dish_id: Optional[int] = None
+    menu_item_id: Optional[int] = None
     resource_id: Optional[int] = None
-    amount: Optional[int] = None
+    quantity: Optional[int] = None
 
 class Recipe(RecipeBase):
     id: int
-    dish: Dish = None
-    resource: Resource = None
+    menu_item: MenuItem = None
+    resource: ResourceManagement = None
 
     class ConfigDict:
         from_attributes = True

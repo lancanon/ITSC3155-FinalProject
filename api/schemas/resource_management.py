@@ -1,4 +1,5 @@
-from pydantic import BaseModel, Optional
+from pydantic import BaseModel
+from typing import Optional
 
 class ResourceManagementBase(BaseModel):
     ingredient_name: str

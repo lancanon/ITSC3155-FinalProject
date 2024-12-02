@@ -11,7 +11,7 @@ router = APIRouter(
 
 ### Do we have a recipe ID or just use the dish ID? The recipe for a dish, if we delete the recipe we delete the dish
 ### but we'd also have to make that the dish id and recipe id stay consistent within the database. 
-@router.post("/", response_model=schema.RecipeCreate)
+@router.post("/", response_model=schema.Recipe)
 def create(request: schema.RecipeCreate, db: Session = Depends(get_db)):
     return controller.create(db=db, request=request)
 
