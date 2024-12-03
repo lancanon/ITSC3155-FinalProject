@@ -1,28 +1,40 @@
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from .order_details import OrderDetail
 
-
-
+# Base Order schema shared by both account and guest orders
 class OrderBase(BaseModel):
     customer_name: str
     description: Optional[str] = None
+    tracking_number: str  # Tracking number is included but will be auto-generated
+    total_price: float  # Adding the total price
 
-
+# Order schema when creating a new order (this can be for account or guest)
 class OrderCreate(OrderBase):
-    pass
+    email: EmailStr  # Email is required to identify the guest or existing customer
+    phone_number: Optional[str] = None  # Optional for guest orders
+    address: Optional[str] = None  # Optional, but often necessary for guest orders
 
+    class Config:
+        # Only send fields that the client needs to provide for order creation
+        orm_mode = True
 
+# Order update schema for modifying an existing order
 class OrderUpdate(BaseModel):
     customer_name: Optional[str] = None
     description: Optional[str] = None
+    tracking_number: Optional[str] = None  # The tracking number can be updated if needed
+    total_price: Optional[float] = None
 
+    class Config:
+        orm_mode = True
 
+# Order schema with additional fields for retrieving an order (e.g., id, order_date)
 class Order(OrderBase):
     id: int
     order_date: Optional[datetime] = None
-    order_details: list[OrderDetail] = None
+    order_details: Optional[list[OrderDetail]] = None  # If applicable, add OrderDetail information
 
-    class ConfigDict:
-        from_attributes = True
+    class Config:
+        orm_mode = True

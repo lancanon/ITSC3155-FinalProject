@@ -10,7 +10,7 @@ class Customer(Base):
     email = Column(String(150), unique=True, nullable=False)
     phone_number = Column(String(15), unique=True, nullable=False)
     address = Column(Text, nullable=True)
-    password_hash = Column(String(256), nullable=False)
+    password = Column(String(256), nullable=False)
     saved_payment = Column(String(50), nullable=True)
 
     # relationships
