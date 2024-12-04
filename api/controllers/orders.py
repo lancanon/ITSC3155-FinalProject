@@ -3,6 +3,8 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 from ..models import orders as order_model
 from ..models import customers as customer_model
+from ..models import menu_items as menu_model
+from ..models import order_details as order_detail_model
 from sqlalchemy.exc import SQLAlchemyError
 import uuid
 
@@ -22,7 +24,7 @@ def create_order(db: Session, request):
             email=request.email,
             phone_number=request.phone_number,
             address=request.address,
-            password="guest_password",  
+            password="guest_password",  # Default password for guest users
             saved_payment=None  # No saved payment info for guests
         )
         try:
@@ -32,34 +34,62 @@ def create_order(db: Session, request):
         except SQLAlchemyError as e:
             error = str(e.__dict__['orig'])
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
-    
+
     # Generate a unique tracking number
     tracking_number = generate_tracking_number()
 
-    # Check if tracking number already exists in the database (optional but adds safety)
-    existing_order = db.query(order_model.Order).filter(order_model.Order.tracking_number == tracking_number).first()
-    if existing_order:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Tracking number already exists.")
-    
     # Create the order and link it to the customer (existing or newly created)
-    new_item = order_model.Order(
+    new_order = order_model.Order(
         customer_id=customer.id,  # Link the order to the customer
         customer_name=request.customer_name,
-        description=request.description,
         tracking_number=tracking_number,  # Automatically generated
-        total_price=request.total_price
+        total_price=0  # Start with a total price of 0, which will be updated later
     )
-    
+
     try:
-        db.add(new_item)
-        db.commit()
-        db.refresh(new_item)
+        # First, add the order so that we can get the `id` for the order details
+        db.add(new_order)
+        db.commit()  # Commit to generate the `id`
+        db.refresh(new_order)  # Refresh to get the order ID
     except SQLAlchemyError as e:
         error = str(e.__dict__['orig'])
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
-    
-    return new_item
 
+    # Initialize the total price
+    total_price = 0
+
+    # Add order details based on the menu items selected
+    for item in request.menu_items:
+        menu_item = db.query(menu_model.MenuItem).filter(menu_model.MenuItem.id == item.menu_item_id).first()
+        if not menu_item:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Menu item with ID {item.menu_item_id} not found")
+
+        # Calculate the price for this order detail
+        item_price = menu_item.price * item.quantity
+        total_price += item_price
+
+        # Create an order detail record (fixed import here)
+        order_detail = order_detail_model.OrderDetail(
+            order_id=new_order.id,  # Link the order detail to the created order
+            menu_item_id=item.menu_item_id,
+            quantity=item.quantity,
+            price=item_price
+        )
+        db.add(order_detail)
+
+    # Apply sales tax to total price (for example, 7%)
+    total_price += total_price * 0.07
+    new_order.total_price = total_price
+
+    try:
+        # Final commit to save the updated order and order details
+        db.commit()
+        db.refresh(new_order)
+    except SQLAlchemyError as e:
+        error = str(e.__dict__['orig'])
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+
+    return new_order
 
 
 
