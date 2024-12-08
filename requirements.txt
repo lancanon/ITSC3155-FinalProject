@@ -6,3 +6,6 @@ pytest
 pytest-mock
 httpx
 cryptography
+passlib
+python-dotenv
+typing-extensions
