@@ -1,92 +1,92 @@
-from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import SQLAlchemyError
+from fastapi import HTTPException, status
 from ..models.payment_info import PaymentInformation
-from ..models.orders import Order
 from typing import Optional
 from ..schemas.payment_info import PaymentInformationCreate, PaymentInformationUpdate
+from sqlalchemy.exc import SQLAlchemyError
 
-def create_payment_info(db: Session, request: PaymentInformationCreate):
-    # validate order_id exists
-    order = db.query(Order).filter(Order.id == request.order_id).first()
-    if not order:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="order not found")
 
-    # validate transaction_status
-    if request.transaction_status not in ["Pending", "Completed", "Failed"]:
+def read_all_payment_info(
+    db: Session,
+    order_id: Optional[int] = None,
+    transaction_status: Optional[str] = None
+):
+    try:
+        query = db.query(PaymentInformation)
+
+        # Apply filters if provided
+        if order_id:
+            query = query.filter(PaymentInformation.order_id == order_id)
+        if transaction_status:
+            query = query.filter(PaymentInformation.transaction_status == transaction_status)
+
+        # Execute query
+        payment_info_list = query.all()
+        return payment_info_list
+    except SQLAlchemyError as e:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="invalid transaction status. must be 'Pending', 'Completed', or 'Failed'"
+            status_code=500,
+            detail=f"Database Error: {str(e)}"
         )
-
-    # create new payment information
-    payment_info = PaymentInformation(
+    
+# Create new payment info
+def create_payment_info(db: Session, request: PaymentInformationCreate):
+    new_payment = PaymentInformation(
         order_id=request.order_id,
         payment_type=request.payment_type,
-        card_number=request.card_number,
         transaction_status=request.transaction_status,
     )
     try:
-        db.add(payment_info)
+        db.add(new_payment)
         db.commit()
-        db.refresh(payment_info)
+        db.refresh(new_payment)
+        return new_payment
     except SQLAlchemyError as e:
-        error = str(e.__dict__.get("orig", e))
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
-    return payment_info
+# Get all payment info with optional filters
+def get_all_payment_info(db: Session, order_id: Optional[int] = None, status: Optional[str] = None):
+    query = db.query(PaymentInformation)
+    if order_id:
+        query = query.filter(PaymentInformation.order_id == order_id)
+    if status:
+        query = query.filter(PaymentInformation.transaction_status == status)
+    return query.all()
 
-def read_all_payment_info(db: Session):
-    try:
-        # Query all payment information without masking the card number
-        payment_infos = db.query(PaymentInformation).all()
-        return payment_infos
-    except SQLAlchemyError as e:
-        error = str(e.__dict__["orig"])
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+# Get a specific payment info by ID
+def get_payment_info(db: Session, payment_id: int):
+    payment = db.query(PaymentInformation).filter(PaymentInformation.id == payment_id).first()
+    if not payment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Payment information not found")
+    return payment
 
-
-def read_payment_info(db: Session, payment_id: int):
-    payment_info = db.query(PaymentInformation).filter(PaymentInformation.id == payment_id).first()
-    if not payment_info:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Payment info not found")
-    # Return the payment info as is
-    return payment_info
-
-
+# Update payment info by ID
 def update_payment_info(db: Session, payment_id: int, request: PaymentInformationUpdate):
-    payment_info = db.query(PaymentInformation).filter(PaymentInformation.id == payment_id)
-    if not payment_info.first():
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="payment info not found")
-
-    # validate transaction_status if provided
-    if request.transaction_status and request.transaction_status not in ["Pending", "Completed", "Failed"]:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="invalid transaction status. must be 'Pending', 'Completed', or 'Failed'"
-        )
-
-    # apply updates
+    payment = db.query(PaymentInformation).filter(PaymentInformation.id == payment_id).first()
+    if not payment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Payment information not found")
+    
     update_data = request.dict(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(payment, key, value)
+    
     try:
-        payment_info.update(update_data, synchronize_session=False)
         db.commit()
+        db.refresh(payment)
+        return payment
     except SQLAlchemyError as e:
-        error = str(e.__dict__.get("orig", e))
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
-    return payment_info.first()
-
+# Delete payment info by ID
 def delete_payment_info(db: Session, payment_id: int):
-    payment_info = db.query(PaymentInformation).filter(PaymentInformation.id == payment_id)
-    if not payment_info.first():
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="payment info not found")
-
+    payment = db.query(PaymentInformation).filter(PaymentInformation.id == payment_id).first()
+    if not payment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Payment information not found")
     try:
-        payment_info.delete(synchronize_session=False)
+        db.delete(payment)
         db.commit()
     except SQLAlchemyError as e:
-        error = str(e.__dict__.get("orig", e))
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
-
-    return {"message": "payment info deleted successfully"}
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

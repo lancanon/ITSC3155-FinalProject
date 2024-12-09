@@ -9,3 +9,4 @@ cryptography
 passlib
 python-dotenv
 typing-extensions
+pydantic

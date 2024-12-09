@@ -1,5 +1,6 @@
 from sqlalchemy import Column, String, Float, Integer
 from sqlalchemy.orm import relationship
+from ..models.menu_item_ingredients import menu_item_ingredients
 from ..dependencies.database import Base
 
 class ResourceManagement(Base):
@@ -11,10 +12,10 @@ class ResourceManagement(Base):
     unit = Column(String(50), nullable=False)
     threshold_level = Column(Float, nullable=False)
 
-    # Relationship with Menu Items
+    # Relationships
     menu_items = relationship(
         "MenuItem",
-        secondary="menu_item_ingredients",
+        secondary=menu_item_ingredients,  # Use the table object, not a string
         back_populates="resources"
     )
 

@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, String, Float, Text, Boolean
 from sqlalchemy.orm import relationship
+from ..models.menu_item_ingredients import menu_item_ingredients
 from ..dependencies.database import Base
-import json
 
 class MenuItem(Base):
     __tablename__ = "menu_items"
@@ -18,10 +18,18 @@ class MenuItem(Base):
     # Relationships
     resources = relationship(
         "ResourceManagement",
-        secondary="menu_item_ingredients",
+        secondary=menu_item_ingredients,
         back_populates="menu_items"
     )
     order_details = relationship("OrderDetail", back_populates="menu_item")
+
+    @property
+    def ingredients(self):
+        """
+        Returns a dictionary of ingredient names and their required quantities.
+        This aggregates data from the `resources` relationship.
+        """
+        return {resource.ingredient_name: resource.current_amount for resource in self.resources}
 
     def __repr__(self):
         return f"<MenuItem(name={self.name}, price={self.price}, available={self.available})>"

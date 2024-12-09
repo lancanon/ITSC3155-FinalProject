@@ -1,9 +1,21 @@
 from datetime import datetime
-from typing import Optional, List, Literal
+from typing import Optional, List
 from enum import Enum
 from pydantic import BaseModel, EmailStr, validator
 from .order_details import OrderDetail
 
+# Enum for payment methods
+class PaymentMethod(str, Enum):
+    credit_card = "Credit Card"
+    paypal = "PayPal"
+    cash = "Cash"
+    apple_pay = "Apple Pay"
+
+# Enum for payment statuses
+class PaymentStatus(str, Enum):
+    pending = "Pending"
+    paid = "Paid"
+    failed = "Failed"
 
 # Represents an individual item in the order
 class OrderItemCreate(BaseModel):
@@ -18,8 +30,7 @@ class OrderItemCreate(BaseModel):
         return value
 
     class Config:
-        from_attributes = True
-
+        orm_mode = True
 
 # Base schema for orders (shared attributes between create, update, and read operations)
 class OrderBase(BaseModel):
@@ -29,7 +40,7 @@ class OrderBase(BaseModel):
     total_price: float  # Total price of the order, including taxes
     order_type: str  # Type of order: "Takeout" or "Delivery"
     promotion_code: Optional[str] = None  # Promotion code applied to the order, if any
-    payment_status: str = "Pending"  # Payment status: "Pending", "Paid", or "Failed"
+    payment_status: PaymentStatus = PaymentStatus.pending  # Default payment status
 
     # Ensure the total price is non-negative
     @validator("total_price")
@@ -46,8 +57,7 @@ class OrderBase(BaseModel):
         return value
 
     class Config:
-        from_attributes = True
-
+        orm_mode = True
 
 # Schema for creating a new order
 class OrderCreate(BaseModel):
@@ -57,7 +67,6 @@ class OrderCreate(BaseModel):
     address: Optional[str] = None  # Required for "Delivery" orders
     menu_items: List[OrderItemCreate]  # List of menu items being ordered
     order_type: str = "Takeout"  # Default order type
-    promotion_code: Optional[str] = None  # Optional promotion code for discount
 
     # Validate that address is required for delivery orders
     @validator("address", always=True)
@@ -67,8 +76,7 @@ class OrderCreate(BaseModel):
         return value
 
     class Config:
-        from_attributes = True
-
+        orm_mode = True
 
 # Schema for updating an existing order
 class OrderUpdate(BaseModel):
@@ -78,40 +86,47 @@ class OrderUpdate(BaseModel):
     total_price: Optional[float] = None  # Optional total price
     order_type: Optional[str] = None  # Optional order type: "Takeout" or "Delivery"
     promotion_code: Optional[str] = None  # Optional promotion code
-    payment_status: Optional[str] = None  # Optional payment status
-
-    # Ensure the order type is valid if provided
-    @validator("order_type")
-    def validate_order_type(cls, value):
-        if value and value not in ["Takeout", "Delivery"]:
-            raise ValueError("Order type must be 'Takeout' or 'Delivery'")
-        return value
+    payment_status: Optional[PaymentStatus] = None  # Optional payment status
 
     # Ensure the payment status is valid if provided
-    @validator("payment_status")
+    @validator("payment_status", pre=True, always=True)
     def validate_payment_status(cls, value):
-        if value and value not in ["Pending", "Paid", "Failed"]:
-            raise ValueError("Payment status must be 'Pending', 'Paid', or 'Failed'")
+        if value and value not in PaymentStatus.__members__:
+            raise ValueError("Invalid payment status")
         return value
 
     class Config:
-        from_attributes = True
-        
-# Define valid payment methods using an Enum
-class PaymentMethod(str, Enum):
-    credit_card = "Credit Card"
-    paypal = "PayPal"
-    cash = "Cash"
-    apple_pay = "Apple Pay"
+        orm_mode = True
 
+# Schema for processing a payment
 class PaymentRequest(BaseModel):
-    payment_method: PaymentMethod  # Use the enum here
+    payment_method: PaymentMethod  # Payment method
     promo_code: Optional[str] = None  # Optional promo code
+
 # Schema for retrieving an order (read operation)
 class Order(OrderBase):
     id: int  # Unique identifier for the order
     order_date: Optional[datetime] = None  # Date when the order was placed
     order_details: Optional[List[OrderDetail]] = None  # Details of the order
+
+    class Config:
+        orm_mode = True
+
+class TrackingResponse(BaseModel):
+    tracking_number: str  # The order's tracking number
+    status: str  # The order's current status
+
+    class Config:
+        orm_mode = True
+
+# Schema for payment information response
+class PaymentInformationResponse(BaseModel):
+    message: str
+    order_id: int
+    final_price: float
+    payment_status: str
+    payment_type: str
+    created_at: datetime 
 
     class Config:
         from_attributes = True

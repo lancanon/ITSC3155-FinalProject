@@ -74,3 +74,21 @@ def get_all_reviews(db: Session):
         return db.query(rr_model.RatingReview).all()
     except SQLAlchemyError as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+    
+# Delete a review
+def delete_review(db: Session, review_id: int):
+    """
+    Delete a rating review by its ID.
+    """
+    review = db.query(rr_model.RatingReview).filter(rr_model.RatingReview.id == review_id).first()
+    if not review:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Review not found")
+
+    try:
+        db.delete(review)
+        db.commit()
+    except SQLAlchemyError as e:
+        error = str(e.__dict__["orig"])
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+
+    return {"message": f"Review with ID {review_id} successfully deleted"}

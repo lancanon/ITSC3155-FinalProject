@@ -1,7 +1,9 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from fastapi import HTTPException, status, Response
 from ..models import menu_items as model, resource_management as resource_model
 from ..models.menu_items import MenuItem
+from ..models.resource_management import ResourceManagement  # Import the ResourceManagement model
+from ..models.menu_item_ingredients import menu_item_ingredients  # Import the association table
 from typing import Optional
 from ..schemas.menu_items import DietaryCategory
 from sqlalchemy.exc import SQLAlchemyError
@@ -29,7 +31,7 @@ def validate_ingredients(db: Session, ingredients: dict):
 
 # Create a new menu item
 def create(db: Session, request):
-    new_item = model.MenuItem(
+    new_item = MenuItem(
         name=request.name,
         description=request.description,
         price=request.price,
@@ -39,17 +41,20 @@ def create(db: Session, request):
         available=request.available
     )
 
-    # Add ingredients to the menu item
-    for ingredient_id, amount in request.ingredients.items():
-        resource = db.query(model.ResourceManagement).filter_by(id=ingredient_id).first()
-        if not resource:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Ingredient with ID {ingredient_id} not found"
-            )
-        new_item.ingredients.append(resource)
-
     try:
+        # Link ingredients
+        for ingredient_name, quantity in request.ingredients.items():
+            resource = db.query(ResourceManagement).filter(
+                ResourceManagement.ingredient_name == ingredient_name
+            ).first()
+            if not resource:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Ingredient '{ingredient_name}' not found"
+                )
+            # Add the resource to the menu item's resources
+            new_item.resources.append(resource)
+
         db.add(new_item)
         db.commit()
         db.refresh(new_item)
@@ -62,53 +67,89 @@ def create(db: Session, request):
 
 # Get all menu items with optional filters
 # Example: Accessing resources in read_all
-def read_all(db: Session, category: Optional[DietaryCategory] = None, available: Optional[bool] = None):
-    query = db.query(MenuItem)
-
-    if category:
-        query = query.filter(MenuItem.dietary_category == category.value)
-    if available is not None:
-        query = query.filter(MenuItem.available == available)
-
+def read_all(db: Session, category: Optional[str] = None, available: Optional[bool] = None):
     try:
+        # Build the query
+        query = db.query(MenuItem)
+        
+        if category:
+            query = query.filter(MenuItem.dietary_category == category)
+        if available is not None:
+            query = query.filter(MenuItem.available == available)
+
+        # Fetch all menu items
         items = query.all()
+
+        # Log related resources for debugging
         for item in items:
-            item.resources = [resource for resource in item.resources]  # Access related resources
+            print(f"Menu Item: {item.name}, Resources: {[resource.ingredient_name for resource in item.resources]}")
+        
         return items
     except SQLAlchemyError as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
+        raise HTTPException(status_code=500, detail=f"Database Error: {str(e)}")
 
 # Get a specific menu item by ID
 def read_one(db: Session, item_id: int):
+    """
+    Fetch a single menu item by its ID, including its associated ingredients.
+    """
     try:
-        item = db.query(model.MenuItem).filter(model.MenuItem.id == item_id).first()
+        # Use `joinedload` to eagerly load the related resources
+        item = db.query(MenuItem).options(joinedload(MenuItem.resources)).filter(MenuItem.id == item_id).first()
+        
         if not item:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Menu item not found")
 
-        item.ingredients = json.loads(item.ingredients)  # Parse JSON to dictionary
-        return item
+        # Extract resources (ingredients) into a dictionary
+        ingredients = {
+            resource.ingredient_name: resource.current_amount
+            for resource in item.resources
+        }
+
+        # Include the parsed ingredients in the response
+        result = {
+            "id": item.id,
+            "name": item.name,
+            "description": item.description,
+            "price": item.price,
+            "calories": item.calories,
+            "menu_category": item.menu_category,
+            "dietary_category": item.dietary_category,
+            "available": item.available,
+            "ingredients": ingredients
+        }
+
+        return result
     except SQLAlchemyError as e:
         error = str(e.__dict__.get("orig", e))
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
-
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Database Error: {error}")
 
 # Update a menu item by ID
 def update(db: Session, item_id: int, request):
+    item = db.query(MenuItem).filter(MenuItem.id == item_id).first()
+    if not item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Menu item not found")
+
     try:
-        item = db.query(model.MenuItem).filter(model.MenuItem.id == item_id).first()
-        if not item:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Menu item not found")
-
-        if request.ingredients:
-            # Validate and link updated ingredients
-            validated_ingredients = validate_ingredients(db, request.ingredients)
-            item.ingredients = json.dumps(validated_ingredients)
-
+        # Update general fields
         update_data = request.dict(exclude_unset=True)
         for key, value in update_data.items():
             if key != "ingredients":
                 setattr(item, key, value)
+
+        # Update ingredients
+        if request.ingredients:
+            item.resources.clear()  # Clear existing resources
+            for ingredient_name, quantity in request.ingredients.items():
+                resource = db.query(ResourceManagement).filter(
+                    ResourceManagement.ingredient_name == ingredient_name
+                ).first()
+                if not resource:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail=f"Ingredient '{ingredient_name}' not found"
+                    )
+                item.resources.append(resource)
 
         db.commit()
         db.refresh(item)

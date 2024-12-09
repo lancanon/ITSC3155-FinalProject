@@ -8,13 +8,13 @@ class PaymentInformation(Base):
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     order_id = Column(Integer, ForeignKey("orders.id"), nullable=False, index=True)
-    payment_type = Column(String(50), nullable=False)
-    card_number = Column(String(16), nullable=True)  # ensure card numbers are max 16 digits
+    payment_type = Column(String(50), nullable=False)  # e.g., Credit Card, PayPal, etc.
     transaction_status = Column(
-        Enum("Pending", "Completed", "Failed", name="transaction_status_enum"),
-        nullable=False,
-        default="Pending"
+    Enum("Pending", "Paid", "Completed", "Failed", name="transaction_status_enum"),
+    nullable=False,
+    default="Pending"
     )
+
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
     # relationships

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
 from ..controllers import rating_reviews as rr_controller
@@ -27,6 +27,7 @@ def edit_review(review_id: int, request: RatingReviewUpdate, db: Session = Depen
     """
     return rr_controller.edit_review(db=db, review_id=review_id, request=request)
 
+
 # Fetch a list of all reviews
 @router.get("/", response_model=List[RatingReview])
 def get_all_reviews(db: Session = Depends(get_db)):
@@ -34,3 +35,12 @@ def get_all_reviews(db: Session = Depends(get_db)):
     Fetch a list of all reviews.
     """
     return rr_controller.get_all_reviews(db=db)
+
+
+# Delete a review
+@router.delete("/{review_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_review(review_id: int, db: Session = Depends(get_db)):
+    """
+    Delete a rating review by its ID.
+    """
+    return rr_controller.delete_review(db=db, review_id=review_id)
